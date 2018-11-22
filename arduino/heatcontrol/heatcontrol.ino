@@ -1,145 +1,177 @@
-curTemp = 0.
-curMode = "idle"
-tempReached = false
-tempReachedTime = 0
-targetTemp = 0.
-targetDuration = 0
-addInfo = "idling"
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
-init() {
-	startSerial(9600)
+float curTemp = 0.;
+short curMode = 0; // idle
+boolean tempReached = false;
+int tempReachedTime = 0;
+float targetTemp = 0.;
+int targetDuration = 0;
+String addInfo = "idling";
+
+const int RELAY_HEAT = 2;
+const int ONE_WIRE_BUS = 2;
+
+// Valid temperature range
+const double VALID_TEMP_LO = 10.0;
+const double VALID_TEMP_HI = 120.0;
+
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature sensors(&oneWire);
+
+void setup(void) {
+	Serial.begin(9600);
+  pinMode(RELAY_HEAT, OUTPUT);
+  sensors.begin();
 }
 
-resetEverything() {
-	curTemp = 0.
-	curMode = "idle"
-	tempReached = false
-	targetTemp = 0.
-	targetDuration = 0
-	tempReachedTime = 0
-	addInfo = "idling..."
+void resetEverything() {
+	curTemp = 0.;
+	curMode = 0; // idle
+	tempReached = false;
+	targetTemp = 0.;
+	targetDuration = 0;
+	tempReachedTime = 0;
+	addInfo = "idling...";
 }
 
-sendStatus() {
-	statusMsg = curMode+";";
-	statusMsg += addInfo+";";
+void sendStatus() {
+	Serial.print(curMode);
+  Serial.print(";");
+	Serial.print(addInfo);
+  Serial.print(";");
 	
 	if(curMode == "heat") {
-		statusMsg += curTemp+";";
-		statusMsg += tempReached+";";
-		statusMsg += targetTemp+";";
-		statusMsg += (targetDuration * 60) - ((time.millis() - tempReachedTime) / 1000) #Orly?
+		Serial.print(curTemp);
+    Serial.print(";");
+		Serial.print(tempReached);
+    Serial.print(";");
+		Serial.print(targetTemp);
+    Serial.print(";");
+    float tempTemp = (targetDuration * 60) - ((millis() - tempReachedTime) / 1000);
+		Serial.print(tempTemp);
 	}
-	
-	statusMsg += "\n";
-	
-	Serial.write(statusMsg);
+		
+	Serial.println();
+  Serial.flush();
 }
 
-readMode() {
-	while(Serial.stillAmStart())
-		# Only read the last incoming message!
-		incomingMsg = Serial.readln();		
+short readMode() {
+  String incomingMsg = "";
+  
+	while(Serial.available() > 0) {
+		// Only read the last incoming message!
+ 		incomingMsg = Serial.readStringUntil("\n");
+	}
+ 
+  Hier noch die verfickte scheisse einlesen in:
+  mode (return)
+  targetTemp und targetDuration = 0;
+
+  return incomingMsg;
 }
 
-idle() {
-	digitalWrite(RELAY, HIGH)
-	addInfo = "Idling..."
+void idle() {
+	digitalWrite(RELAY_HEAT, HIGH);
+	addInfo = "Idling...";
 }
 
-heat() {
-	curTemp = readTemp();
-	
+void heat() {
+  sensors.requestTemperatures(); // Send the command to get temperatures
+  float mTemp = sensors.getTempCByIndex(0);
+
+	String addInfo = "";
+  
 	// Plausicheck for Temp
-	if(curTemp < LOWER or curTemp > HIGHER) {
+	if(curTemp < VALID_TEMP_LO or curTemp > VALID_TEMP_HI) {
 		resetEverything();
 		curMode = "error";
 		idle();
-		addInfo = "Temperature out of bounds: "+str(curTemp);
+		addInfo = "Temperature out of bounds";
 		return;
 	}
 	
 	// Hot enough?
 	if(curTemp >= targetTemp) {
-		digitalWrite(RELAY, HIGH);
-		addInfo = "Holding temperature..."
+		digitalWrite(RELAY_HEAT, HIGH);
+		addInfo = "Holding temperature...";
 		
 		if(!tempReached) {
 			// Watermarking current heat period
-			tempReachedTime = time.millis()
+			tempReachedTime = millis();
 			tempReached = true;
-			addInfo = "Target temperature reached at "+str(tempReachedTime);
+			addInfo = "Target temperature reached";
 		}
 		
 	} else {
 		// HEAT!
-		digitalWrite(RELAY, LOW)
-		addInfo = "Heating..."
+		digitalWrite(RELAY_HEAT, LOW);
+		addInfo = "Heating...";
 	}
 	
-	if(tempReached && (time.millis() - tempReachedTime) / 1000 > targetDuration) {
+	if(tempReached && (millis() - tempReachedTime) / 1000 > targetDuration) {
 		// This heating period has finished!
 		resetEverything();
-		mode = "done";
+		curMode = "done";
 	}
 }
 
-loop() {
-	readMode = readMode()
+void loop() {
+	short rMode = readMode();
 	
 	switch(curMode) {
 		
-		case "idle":
-			switch(readMode) {
+		case 0: // idle
+			switch(rMode) {
 				default:
-				case "idle":
+				case 0: // idle
 					// Chill even harder!
-					idle()
-					chill = 2
+					idle();
+					chill = 2;
 					break;
-				case "heat":
+				case 1: // heat
 					// Prepare for heating and continue immediately
 					resetEverything();
-					curMode = "heat"
-					readTargets()
-					chill = 0
+					curMode = 1; // heat
+					chill = 0;
 					break;
 			}
 			break;
 		
-		case "heat":
-			switch(readMode) {
+		case 1: // heat
+			switch(rMode) {
 				default:
-				case "idle":
-					resetEverything()
+				case 0: // idle
+					resetEverything();
 					chill = 1;
 					break;
-				case "heat":
+				case 1: //heat
 					heat();
 					chill = 1;
 					break;
 			}
 			break;
 			
-		case "done":
-			switch(readMode) {
+		case 2: // done
+			switch(rMode) {
 				default:
-				case "idle":
+				case 0: // idle
 					resetEverything();
 					idle();
 					chill = 1;
 					break;
-				case "heat":
+				case 1: // heat
 					// Prepare for heating and continue immediately
 					resetEverything();
-					curMode = "heat"
-					readTargets()
-					chill = 0
+					curMode = 1; // heat
+					chill = 0;
 					break;
 			}
 			break;
 	}
 	
 	sendStatus();
-	sleep(chill)
+	sleep(chill);
 }
