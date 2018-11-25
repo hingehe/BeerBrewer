@@ -8,8 +8,9 @@ int tempReachedTime = 0;
 float targetTemp = 0.;
 int targetDuration = 0;
 String addInfo = "idling";
+char lastMsg[40];
 
-const int RELAY_HEAT = 2;
+const int RELAY_HEAT = 4;
 const int ONE_WIRE_BUS = 2;
 
 // Valid temperature range
@@ -18,23 +19,58 @@ const double VALID_TEMP_HI = 120.0;
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
-// Pass our oneWire reference to Dallas Temperature. 
 DallasTemperature sensors(&oneWire);
 
 void setup(void) {
 	Serial.begin(9600);
   pinMode(RELAY_HEAT, OUTPUT);
   sensors.begin();
+  curMode = 0; // idle
 }
 
-void resetEverything() {
+void resetEverything(void) {
 	curTemp = 0.;
-	curMode = 0; // idle
 	tempReached = false;
 	targetTemp = 0.;
 	targetDuration = 0;
 	tempReachedTime = 0;
-	addInfo = "idling...";
+}
+
+
+const int SERIAL_BUFFER_SIZE = 21;
+char serial_buffer[SERIAL_BUFFER_SIZE];
+
+void setup()
+{
+  Serial.begin(9600);
+}
+
+bool readSerial() {
+  static byte index;
+
+  while (Serial.available()) {
+    char c = Serial.read();
+
+    if (c >= 32 && index < SERIAL_BUFFER_SIZE - 1) {
+      serial_buffer[index++] = c;
+    } else if (c == '\n' && index > 0) {
+      serial_buffer[index] = '\0';
+      index = 0;
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+short parseSerial() {
+  short rMode = atoi(strtok(serial_buffer, ";"));
+  if(rMode == 1) { // heat
+    targetTemp = atoi(strtok(NULL, ";"));
+    targetDuration = atoi(strtok(NULL, ";"));
+  }
+  
+  return rMode;
 }
 
 void sendStatus() {
@@ -43,7 +79,7 @@ void sendStatus() {
 	Serial.print(addInfo);
   Serial.print(";");
 	
-	if(curMode == "heat") {
+	if(curMode == 1) { // heat
 		Serial.print(curTemp);
     Serial.print(";");
 		Serial.print(tempReached);
@@ -56,21 +92,6 @@ void sendStatus() {
 		
 	Serial.println();
   Serial.flush();
-}
-
-short readMode() {
-  String incomingMsg = "";
-  
-	while(Serial.available() > 0) {
-		// Only read the last incoming message!
- 		incomingMsg = Serial.readStringUntil("\n");
-	}
- 
-  Hier noch die verfickte scheisse einlesen in:
-  mode (return)
-  targetTemp und targetDuration = 0;
-
-  return incomingMsg;
 }
 
 void idle() {
@@ -87,7 +108,7 @@ void heat() {
 	// Plausicheck for Temp
 	if(curTemp < VALID_TEMP_LO or curTemp > VALID_TEMP_HI) {
 		resetEverything();
-		curMode = "error";
+		curMode = 3; // error
 		idle();
 		addInfo = "Temperature out of bounds";
 		return;
@@ -114,13 +135,16 @@ void heat() {
 	if(tempReached && (millis() - tempReachedTime) / 1000 > targetDuration) {
 		// This heating period has finished!
 		resetEverything();
-		curMode = "done";
+		curMode = 2; // done
 	}
 }
 
 void loop() {
-	short rMode = readMode();
-	
+  short rMode = curMode;
+
+  if (readSerial())
+    rMode = parseSerial();
+
 	switch(curMode) {
 		
 		case 0: // idle
