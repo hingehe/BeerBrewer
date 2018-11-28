@@ -17,7 +17,7 @@ const int ONE_WIRE_BUS = 2;
 const double VALID_TEMP_LO = 10.0;
 const double VALID_TEMP_HI = 120.0;
 
-const int SERIAL_BUFFER_SIZE = 21;
+const int SERIAL_BUFFER_SIZE = 30;
 char serial_buffer[SERIAL_BUFFER_SIZE];
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
