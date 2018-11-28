@@ -17,6 +17,9 @@ const int ONE_WIRE_BUS = 2;
 const double VALID_TEMP_LO = 10.0;
 const double VALID_TEMP_HI = 120.0;
 
+const int SERIAL_BUFFER_SIZE = 21;
+char serial_buffer[SERIAL_BUFFER_SIZE];
+
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
@@ -34,15 +37,6 @@ void resetEverything(void) {
 	targetTemp = 0.;
 	targetDuration = 0;
 	tempReachedTime = 0;
-}
-
-
-const int SERIAL_BUFFER_SIZE = 21;
-char serial_buffer[SERIAL_BUFFER_SIZE];
-
-void setup()
-{
-  Serial.begin(9600);
 }
 
 bool readSerial() {
@@ -141,6 +135,7 @@ void heat() {
 
 void loop() {
   short rMode = curMode;
+  short chill = 1;
 
   if (readSerial())
     rMode = parseSerial();
@@ -197,5 +192,5 @@ void loop() {
 	}
 	
 	sendStatus();
-	sleep(chill);
+	delay(chill);
 }
