@@ -20,19 +20,19 @@ const double VALID_TEMP_HI = 120.0;
 const int SERIAL_BUFFER_SIZE = 30;
 char serial_buffer[SERIAL_BUFFER_SIZE];
 
-// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+// Setup a oneWire instance
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
 void setup(void) {
 	Serial.begin(9600);
   pinMode(RELAY_HEAT, OUTPUT);
+  pinMode(ONE_WIRE_BUS, INPUT);
   sensors.begin();
   curMode = 0; // idle
 }
 
 void resetEverything(void) {
-	curTemp = 0.;
 	tempReached = false;
 	targetTemp = 0.;
 	targetDuration = 0;
@@ -80,7 +80,14 @@ void sendStatus() {
     Serial.print(";");
 		Serial.print(targetTemp);
     Serial.print(";");
-    float tempTemp = (targetDuration * 60) - ((millis() - tempReachedTime) / 1000);
+    
+    float tempTemp = -1.;
+    if(tempReached) {
+      tempTemp = (targetDuration * 60) - ((millis() - tempReachedTime) / 1000);
+    } else {
+      tempTemp = targetDuration * 60;
+    }
+    
 		Serial.print(tempTemp);
 	}
 		
@@ -90,14 +97,14 @@ void sendStatus() {
 
 void idle() {
 	digitalWrite(RELAY_HEAT, HIGH);
-	addInfo = "Idling...";
+	addInfo = "Idling";
 }
 
 void heat() {
   sensors.requestTemperatures(); // Send the command to get temperatures
   float mTemp = sensors.getTempCByIndex(0);
 
-	String addInfo = "";
+	addInfo = "Heat";
   
 	// Plausicheck for Temp
 	if(curTemp < VALID_TEMP_LO or curTemp > VALID_TEMP_HI) {
@@ -123,12 +130,13 @@ void heat() {
 	} else {
 		// HEAT!
 		digitalWrite(RELAY_HEAT, LOW);
-		addInfo = "Heating...";
+		addInfo = "Heating";
 	}
 	
-	if(tempReached && (millis() - tempReachedTime) / 1000 > targetDuration) {
+	if(tempReached && (millis() - tempReachedTime) / 1000 > targetDuration * 60) {
 		// This heating period has finished!
-		resetEverything();
+    tempReached = false;
+    addInfo = "Done";
 		curMode = 2; // done
 	}
 }
@@ -136,6 +144,9 @@ void heat() {
 void loop() {
   short rMode = curMode;
   short chill = 1;
+
+  sensors.requestTemperatures();
+  curTemp = sensors.getTempCByIndex(0);
 
   if (readSerial())
     rMode = parseSerial();
@@ -152,7 +163,6 @@ void loop() {
 					break;
 				case 1: // heat
 					// Prepare for heating and continue immediately
-					resetEverything();
 					curMode = 1; // heat
 					chill = 0;
 					break;
@@ -174,8 +184,8 @@ void loop() {
 			break;
 			
 		case 2: // done
+      addInfo = "Done";
 			switch(rMode) {
-				default:
 				case 0: // idle
 					resetEverything();
 					idle();
@@ -183,14 +193,15 @@ void loop() {
 					break;
 				case 1: // heat
 					// Prepare for heating and continue immediately
-					resetEverything();
 					curMode = 1; // heat
 					chill = 0;
 					break;
+        default:
+          break;
 			}
 			break;
 	}
 	
 	sendStatus();
-	delay(chill);
+	delay(chill*1000);
 }
