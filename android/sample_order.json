@@ -1,0 +1,25 @@
+{
+	"BrauOrder":
+	{
+		"name": "Kellerbier",
+		"MaischePlan":[
+			{
+				"seq":0,
+				"rastname":"Einmaischen",
+				"temp":"55.0",
+				"duration":"30"
+			},
+			{
+				"seq":1,
+				"rastname":"Eiweisrast",
+				"temp":"72.0",
+				"duration":"40"
+			},
+			{
+				"seq":2,
+				"rastname":"Verzuckerungsrast",
+				"temp":"78.0",
+				"duration":"20"
+			}		]
+	}
+}
