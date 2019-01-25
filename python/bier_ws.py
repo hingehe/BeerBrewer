@@ -1,15 +1,20 @@
-##################################
+################################################################################
 # Webservice for arduinoControl running on 192.168.2.39:5550
 # Important Methods:
 # * getStatus (GET)
 # * createNewOrder (Jason-POST)
 # 
-# Date: 20190125
+# Date: 20181015
 # Author: Sebastian Sauer
 #
 # TODO:
 # * Try catch around thread, to always gracefully quit and shutdown arduino
-##################################
+# * Add Methods to satisfy Andriod calls
+#
+# History:
+# 0.1 - 20181015 - sauer - Alpha Version
+# 0.5 - 20190123 - sauer - Beta Version (running)
+################################################################################
 
 from flask import Flask, json, request
 from arduinoControl import ArduinoControl

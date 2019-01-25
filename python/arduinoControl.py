@@ -1,14 +1,20 @@
-##################################
+################################################################################
 # Controller class for Arduino BeerBrewer (temperature control and stiring)
-# Is managed by Flask Webservice and basically translates json brew receipies into arduino actions.
+# Is managed by Flask Webservice and basically translates json brew receipies
+# into arduino actions.
 # 
-# Date: 20190125
+# Date: 20181015
 # Author: Sebastian Sauer
 #
 # TODO:
-# * Wasserstand für heatduration fusioniert noch nicht -> ist direkt bei erreichen der target Temp fertig?!
 # * Queue basteln, damit der Webservice die lastNSTatus melden kann
-##################################
+# * ValueError: I/O operation on closed file. beim initialen ctrl+c??
+# * File logging does not work (wrong numbers)
+#
+# History:
+# 0.1 - 20181015 - sauer - Alpha Version
+# 0.5 - 20190123 - sauer - Beta Version (running without stir)
+################################################################################
 
 import time
 import datetime
@@ -126,6 +132,7 @@ class ArduinoControl(object):
         self.thread.start()
 
     def stop(self):
+        self.stopOrder()
         print("Stop Arduino communication...")
         self.thread.do_run = False
         self.currentOrderFile.close()
