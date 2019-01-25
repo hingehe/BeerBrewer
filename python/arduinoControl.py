@@ -1,47 +1,73 @@
+##################################
+# Controller class for Arduino BeerBrewer (temperature control and stiring)
+# Is managed by Flask Webservice and basically translates json brew receipies into arduino actions.
+# 
+# Date: 20190125
+# Author: Sebastian Sauer
+#
+# TODO:
+# * Wasserstand für heatduration fusioniert noch nicht -> ist direkt bei erreichen der target Temp fertig?!
+# * Queue basteln, damit der Webservice die lastNSTatus melden kann
+##################################
+
 import time
 import datetime
 import json
 import threading
-from fakeArduino import Serial
+import serial
 from threading import Thread
 from collections import deque
 
+BEER_HOME = "/home/pi/BeerBrewerFiles"
+ARDUINO_PORT = "/dev/ttyACM0"
+
 class _ArduinoStatus(object):
     def __init__(self):
-        self.status = "idle"
+        self.status = 0 # idle
         self.timestamp = time.time()
         self.temp = 0.0
         self.resTime = 0
 
     def update(self, incoming):
         self.status = incoming.split(";")[0]
+        print("received status: "+incoming)
         self.timestamp = time.time()
-        if(self.status == "heat"):
+
+        if(self.status == 1): # heat
             self.temp = incoming.split(";")[1]
-            self.resTime = incoming.split(";")[2]
+            self.resTime = incoming.split(";")[3]
 
 class ArduinoControl(object):
     def __init__(self):
         self.arduinoStatus = _ArduinoStatus()
         self.lastNStatus = deque(maxlen=20)
-        self.arduinoSerial = Serial('/dev/ttyS1', 19200, timeout=1)
+        self.arduinoSerial = serial.Serial(ARDUINO_PORT, 9600, timeout=2)
         self.currentOrder = []
-        self.currentOrderFile = open("orderLog/default.json", "a")
+        self.currentOrderFile = open(BEER_HOME+"/default.json", "a")
         self.currentSequence = 0
         self.executeOrder = False
         self.thread = Thread(target=self._handleOrder, args=())     
         self._start()
 
     def _readArduinoStatus(self):
-        val = self.arduinoSerial.readline()
-        self.arduinoStatus.update(val)
+        rawMsg = "void"
+        
+        try:
+            rawMsg = self.arduinoSerial.readline()
+            decodedMsg = rawMsg[0:len(rawMsg)-2].decode()
+            self.arduinoStatus.update(decodedMsg)
+        except:
+            print("Error reading Arduino Status: \n"+str(rawMsg))
+            self.stop()
 
     def getStatus(self):
         return json.dumps(self.arduinoStatus.__dict__)
 
     def _reinitOrderLog(self, name):
         self.currentOrderFile.close()
-        self.currentOrderFile = open("orderLog/"+name+"_"+str(time.time())+".json", "a")
+        newFileName = BEER_HOME+"/"+name+"_"+str(time.time())+".json"
+        self.currentOrderFile = open(newFileName, "a")
+        print("Reinit order file to: "+newFileName)
 
     def getLastNStatus(self):
         return json.dumps(list(self.lastNStatus))
@@ -50,7 +76,7 @@ class ArduinoControl(object):
         print("New Order received, killing old one...")
         self.stopOrder()
         time.sleep(2)
-        print("Saving new Order")
+        print("Saving new Order with "+str(len(newOrder["BrauOrder"]["MaischePlan"]))+" cycles")
         self.currentOrder = newOrder
         self.executeOrder = True
         self._reinitOrderLog(self.currentOrder["BrauOrder"]["name"])
@@ -58,7 +84,8 @@ class ArduinoControl(object):
         self._setStatus()
 
     def stopOrder(self):
-        self.arduinoSerial.write("idle;\n")
+        print("Force Arduino idle...")
+        self.arduinoSerial.write("0;\n".encode()) # idle
         self.currentOrder = []
         self.executeOrder = False
         self.currentSequence = 0
@@ -69,32 +96,37 @@ class ArduinoControl(object):
             self._readArduinoStatus()
             self.lastNStatus.append(self.getStatus())
 
-            if(self.arduinoStatus.status != 'idle'):
+            if(self.arduinoStatus.status != '0'): # idle
                 json.dump(self.arduinoStatus.__dict__, self.currentOrderFile)
                 self.currentOrderFile.write("\n")
                 self.currentOrderFile.flush()
 
-            if(self.arduinoStatus.status == "done" and self.executeOrder):
-                #Hier noch kieken, ob die ganze order nicht schon fertig ist!
-                self.currentSequence += 1
-                self._setStatus()
+            if(self.arduinoStatus.status == "2" and self.executeOrder): # done
+                if(self.currentSequence + 1 < len(self.currentOrder["BrauOrder"]["MaischePlan"])):
+                    self.currentSequence += 1
+                    self._setStatus()
+                else:
+                    self.forceStatus("0"); # idle
+
             time.sleep(1)
 
     def _setStatus(self):
-        commandString = "heat;"
+        commandString = "1;" # heat
         commandString += str(self.currentOrder["BrauOrder"]["MaischePlan"][self.currentSequence]["temp"])+";"
         commandString += str(self.currentOrder["BrauOrder"]["MaischePlan"][self.currentSequence]["duration"]+";\n")
-        self.arduinoSerial.write(commandString)
+        print("Sending: "+commandString)
+        self.arduinoSerial.write(commandString.encode())
 
     def forceStatus(self, status):
-        self.arduinoSerial.write(status+";\n")
+        msg = str(status)+";\n"
+        self.arduinoSerial.write(msg.encode())
         
     def _start(self):
         print("Starting Arduino communication")
         self.thread.start()
 
     def stop(self):
-        print("Stopping Arduino communication...")
+        print("Stop Arduino communication...")
         self.thread.do_run = False
         self.currentOrderFile.close()
         self.thread.join()
