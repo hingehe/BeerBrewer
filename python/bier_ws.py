@@ -58,7 +58,7 @@ def main():
     print("Starting Webservice...")
     # Hier noch einen try-catch mit stopOrder()!
     app.run(host="0.0.0.0", port="5550", debug=False, threaded=True)
-
+    
     print("Webservice stopped")
     arduino.stop()
     print("Exiting...")

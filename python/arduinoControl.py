@@ -9,7 +9,8 @@
 # TODO:
 # * Queue basteln, damit der Webservice die lastNSTatus melden kann
 # * ValueError: I/O operation on closed file. beim initialen ctrl+c??
-# * File logging does not work (wrong numbers)
+# * Add "user action required" waiter/notifier for "Einmaischen" etc.
+# * Use awesome logging library?
 #
 # History:
 # 0.1 - 20181015 - sauer - Alpha Version
@@ -35,13 +36,15 @@ class _ArduinoStatus(object):
         self.resTime = 0
 
     def update(self, incoming):
-        self.status = incoming.split(";")[0]
+        self.status = int(incoming.split(";")[0])
+        self.addInfo = incoming.split(";")[1]
         print("received status: "+incoming)
         self.timestamp = time.time()
 
         if(self.status == 1): # heat
-            self.temp = incoming.split(";")[1]
-            self.resTime = incoming.split(";")[3]
+            self.temp = float(incoming.split(";")[2])
+            self.targetTemp = float(incoming.split(";")[3])
+            self.resTime = int(incoming.split(";")[4])
 
 class ArduinoControl(object):
     def __init__(self):
@@ -102,12 +105,12 @@ class ArduinoControl(object):
             self._readArduinoStatus()
             self.lastNStatus.append(self.getStatus())
 
-            if(self.arduinoStatus.status != '0'): # idle
+            if(self.arduinoStatus.status != 0): # idle
                 json.dump(self.arduinoStatus.__dict__, self.currentOrderFile)
                 self.currentOrderFile.write("\n")
                 self.currentOrderFile.flush()
 
-            if(self.arduinoStatus.status == "2" and self.executeOrder): # done
+            if(self.arduinoStatus.status == 2 and self.executeOrder): # done
                 if(self.currentSequence + 1 < len(self.currentOrder["BrauOrder"]["MaischePlan"])):
                     self.currentSequence += 1
                     self._setStatus()

@@ -14,9 +14,10 @@
  **
  ** Todo:
  ** -  Implement stiring algorithm. Hardware not ready yet
+ ** -  Maybe add some fuzzyness to target temp?
  ** 
  ** History:
- ** 0.1 - 20181015 - sauer - Alpha version (without duration)
+ ** 0.1 - 20181015 - sauer - Alpha version (without duration and stir)
  ** 0.5 - 20190123 - sauer - Beta version (running without stir)
  **
  ******************************************************************/
